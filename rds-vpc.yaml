@@ -1,0 +1,143 @@
+# Description: Initial creation of a 3-AZ VPC for US-West-2
+# Revision: 1.1
+# Date: 2026-03-27
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template to create a VPC spanning 3 AZs in us-west-2 with RDS
+
+Resources:
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: VPC-briboa2448
+
+  # FIXED: Moved out of MyVPC block and aligned correctly
+  MyRDSInstance: 
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: '20'
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      MasterUsername: admin
+      MasterUserPassword: Password123
+      DBSubnetGroupName: !Ref MyDBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref MyVPCSecurityGroup
+
+  # FIXED: Added required Subnet IDs (RDS requires at least two AZs)
+  MyDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: "Subnet group for MyRDSInstance"
+      SubnetIds: 
+        - !Ref PublicSubnetAZ1
+        - !Ref PublicSubnetAZ2
+        - !Ref PublicSubnetAZ3
+
+  # FIXED: Added missing Security Group resource
+  MyVPCSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Enable HTTP access and RDS access"
+      VpcId: !Ref MyVPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: IGW-briboa2448
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MyVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnetAZ1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: us-west-2a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: PublicSubnet-AZ1
+
+  PublicSubnetAZ2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: us-west-2b
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: PublicSubnet-AZ2
+
+  PublicSubnetAZ3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: us-west-2c
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: PublicSubnet-AZ3
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: PublicRouteTable
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociationAZ1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetAZ1
+      RouteTableId: !Ref PublicRouteTable
+
+  SubnetRouteTableAssociationAZ2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetAZ2
+      RouteTableId: !Ref PublicRouteTable
+
+  SubnetRouteTableAssociationAZ3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetAZ3
+      RouteTableId: !Ref PublicRouteTable
+
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref MyVPC
+
+  SubnetAZ1:
+    Description: Subnet in AZ1
+    Value: !Ref PublicSubnetAZ1
+
+  SubnetAZ2:
+    Description: Subnet in AZ2
+    Value: !Ref PublicSubnetAZ2
+
+  SubnetAZ3:
+    Description: Subnet in AZ3
+    Value: !Ref PublicSubnetAZ3
